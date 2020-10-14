@@ -1,7 +1,8 @@
 import requests
 import openpyxl
+import lxml
 from bs4 import BeautifulSoup
-from scrape import website_grab, smoking_grab
+from scrape import website_grab, smoking_grab, social_grab
 
 print("\nMake sure your path.txt is properly addressed! Otherwise the application will crash.\n")
 path_txt = open('path.txt', 'r')
@@ -17,7 +18,8 @@ set_category = input("\n\nEnter category term exactly as listed in cat_list.pdf 
 
 while n >= 1:
 
-    API_KEY = 'Uok93zaKIflvNPgElgAykwI5ptxiVPC_Zwt0mDLb7vtrf0tf2eF9F5qZkIIx5LqjrlwwTHR71TdzU3mgBawIq1em37fHLnYHpKOrcI0miOD-iX-tdIpPAMQGFXt6X3Yx'
+    API_KEY = 'Uok93zaKIflvNPgElgAykwI5ptxiVPC_Zwt0mDLb7vtrf0tf2eF9F5qZkIIx5LqjrlwwTHR71TdzU3mgBawIq1em37fH' \
+              'LnYHpKOrcI0miOD-iX-tdIpPAMQGFXt6X3Yx'
     ENDPOINT = 'https://api.yelp.com/v3/businesses/search'
     HEADERS = {'Authorization': 'bearer %s' % API_KEY}
 
@@ -43,12 +45,34 @@ while n >= 1:
         phone = i["display_phone"]
         id = i["id"]
         url = i["url"]
-        source = requests.get('%s' % url).text
+        headers = {
+            'User-Agent': 'Chrome/85.0.4183.121',
+        }
+        source = requests.get('%s' % url, headers=headers).text
         soup = BeautifulSoup(source, 'lxml')
         website = soup.get
         website = website_grab(website)
         smoking = soup.get
         smoking = smoking_grab(smoking)
+        try:
+            if website != "No business website detected":
+                http_web = 'http://%s' % website + "/index/home"
+                source = requests.get('%s' % http_web, headers=headers).text
+                soup = BeautifulSoup(source, 'lxml')
+                social = soup.get
+                social = social_grab(social)
+                if social[0] and social[1] == "N/A":
+                    http_web = 'http://%s' % website
+                    source = requests.get('%s' % http_web, headers=headers).text
+                    soup = BeautifulSoup(source, 'lxml')
+                    social = soup.get
+                    social = social_grab(social)
+                else:
+                    pass
+            else:
+                social = ["N/A", "N/A"]
+        except:
+            social = ["Web error", "Web error"]
         print("Parsing...")
         try:
             price = i["price"]
@@ -58,7 +82,8 @@ while n >= 1:
             address = i["location"]["address1"] + ", " + set_loc
         except:
             address = "N/a"
-        data_dict[name] = [review_count, rating, phone, price, address, smoking[0], smoking[1], website, url]
+        data_dict[name] = [review_count, rating, phone, price, address, smoking[0], smoking[1], website, social[0],
+                           social[1], url]
 print("100% finished!")
 print("Exporting to excel...")
 workbook = openpyxl.Workbook()
@@ -73,7 +98,9 @@ sheet.cell(row=1, column=6, value="Address in " + set_loc)
 sheet.cell(row=1, column=7, value="Smoking allowed inside?")
 sheet.cell(row=1, column=8, value="Smoking allowed outside?")
 sheet.cell(row=1, column=9, value="Business Website")
-sheet.cell(row=1, column=10, value="Yelp url")
+sheet.cell(row=1, column=10, value="Facebook")
+sheet.cell(row=1, column=11, value="Instagram")
+sheet.cell(row=1, column=12, value="Yelp url")
 
 row = 2
 for key, values in data_dict.items():
@@ -84,4 +111,4 @@ for key, values in data_dict.items():
         column += 1
     row += 2
 
-workbook.save('%s/Leads_generated' % path + '_%s_nightclubs.xlsx' % set_loc)
+workbook.save('%s/Leads_generated' % path + '_%s_' % set_loc + '_%s_.xlsx' % set_category)
